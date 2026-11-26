@@ -1,4 +1,5 @@
 import { AppError, currentBoard } from "./_lib/service.js";
+import { loadSchool } from "./_lib/edookit.js";
 import { boardPage, flashText, messagePage } from "./_lib/render.js";
 import { cookieHeader } from "./_lib/access.js";
 
@@ -12,8 +13,8 @@ export async function onRequestGet({ request, env }) {
   const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
   headers.append("set-cookie", cookieHeader("obed_csrf", csrf, { secure: secure(request) }));
   try {
-    const { board } = await currentBoard(env);
-    return new Response(boardPage(board, { csrf, flash: flashText(url, board) }), { headers });
+    const [{ board }, school] = await Promise.all([currentBoard(env), loadSchool(env)]);
+    return new Response(boardPage(board, { csrf, flash: flashText(url, board), school }), { headers });
   } catch (error) {
     const code = error instanceof AppError ? error.code : "canteen";
     const text = code === "credentials"

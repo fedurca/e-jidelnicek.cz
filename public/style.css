@@ -243,3 +243,55 @@ form { margin: 8px 0 0; }
   .credit, .open-list, .week, .panel { box-shadow: none; }
   form, .foot, .open-list { display: none; }
 }
+
+.school { margin: 18px 0; }
+.school-head, .school-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.school h2, .school h3 { font-family: var(--serif); font-weight: 560; }
+.school h2 { margin: 0 0 8px; font-size: 2rem; }
+.school h3 { margin: 18px 0 8px; font-size: 1.4rem; }
+.school h4 { margin: 0; font-size: 1.05rem; }
+.school-sub { margin-top: 8px; }
+.school-meta { color: var(--muted); margin: 2px 0 0; }
+.school-card, .school-child {
+  background: var(--card);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  margin: 10px 0;
+}
+.school-card.is-unpaid { outline: 2px solid #e7b089; }
+.school-card.is-unread strong::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: var(--tomato);
+}
+.school-details { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; color: var(--muted); }
+.school-days { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.school-day { background: var(--paper); border-radius: 14px; padding: 8px 10px; }
+.school-day.is-today { background: var(--green-bg); }
+.school-day h4 span, .school-day time { display: block; color: var(--muted); font-family: var(--sans); font-weight: 420; font-size: 0.85rem; }
+.school-day p { margin: 8px 0 0; }
+.school-child h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.school-child h3 i { width: 0.8rem; height: 0.8rem; border-radius: 50%; display: inline-block; }
+.school-line { padding: 8px 0; border-top: 1px solid var(--line); }
+.marks { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
+.marks span, .pill {
+  display: inline-block;
+  min-width: 1.4rem;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--paper);
+  text-align: center;
+  font-weight: 640;
+  font-size: 0.85rem;
+}
+.pill { margin: 0 6px 6px 0; font-weight: 560; }
+.pill-bad { background: var(--amber-bg); color: var(--amber); }
+.school-pills { margin: 8px 0; }
+@media (max-width: 860px) {
+  .school-days { grid-template-columns: 1fr; }
+}

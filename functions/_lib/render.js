@@ -1,3 +1,5 @@
+import { schoolSection } from "./school-render.js";
+
 const PROBLEMS = {
   uzavreno: "Tahle objednávka už není otevřená. Stránka ukazuje aktuální stav.",
   jidelna: "Jídelna objednávku odmítla. Zkuste to znovu.",
@@ -74,7 +76,7 @@ function buttonForm(button, cell, row, csrf) {
   </form>`;
 }
 
-export function boardPage(board, { csrf, flash = "" }) {
+export function boardPage(board, { csrf, flash = "", school = null } = {}) {
   const credits = board.children.map((child) => `<article class="credit${child.low_credit ? " is-low" : ""}">
     <p class="credit-name">${esc(child.given_name)}</p>
     <p class="credit-meta">${esc(child.full_name)}${child.class_label ? ` · ${esc(child.class_label)}` : ""}</p>
@@ -116,6 +118,7 @@ export function boardPage(board, { csrf, flash = "" }) {
     : `<section class="credits" aria-label="Kredit dětí">${credits}</section>
       <section class="open-list"><h2>Ještě k objednání</h2>${open}</section>
       ${board.rule ? `<p class="rule">${esc(board.rule)}</p>` : ""}
+      ${schoolSection(school)}
       ${weeks}`;
   return page("Obědy · tento a příští týden", `<header class="mast"><div class="wrap mast-inner">
       <p class="eyebrow">Školní jídelna</p>
