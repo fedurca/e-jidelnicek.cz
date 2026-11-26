@@ -130,7 +130,7 @@ export function boardPage(board, { csrf, flash = "", school = null } = {}) {
       ${flash ? `<p class="flash flash-${flash.startsWith("chyba:") ? "bad" : "ok"}" role="status">${esc(flash.replace(/^chyba:/, ""))}</p>` : ""}
       ${body}
     </main>
-    <footer class="wrap foot"><p>Údaje i objednávky jdou rovnou do e-Jídelníčku. Zrušení i změna platí, jen dokud je jídelna pustí.</p></footer>
+    <footer class="wrap foot"><p>Údaje i objednávky jdou rovnou do e-Jídelníčku. Zrušení i změna platí, jen dokud je jídelna pustí. <a class="text-link" href="/hesla">Uložit hesla</a></p></footer>
     <script>
       document.querySelectorAll("form[data-confirm]").forEach(function (form) {
         form.addEventListener("submit", function (event) {

@@ -8,7 +8,9 @@
     "test": "node --test"
   },
   "dependencies": {
-    "cheerio": "1.0.0"
+    "blakejs": "1.2.1",
+    "cheerio": "1.0.0",
+    "tweetnacl": "1.0.3"
   },
   "devDependencies": {
     "wrangler": "4.54.0"
