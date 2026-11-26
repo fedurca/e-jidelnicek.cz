@@ -1,3 +1,5 @@
+import { renderCalls } from "./calls.js";
+
 function esc(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -50,10 +52,11 @@ function childBlock(child, base) {
 
 export function schoolSection(school) {
   if (!school) return "";
+  const calls = renderCalls(school.calls);
   if (school.missing) {
-    return `<section class="panel school"><h2>Škola</h2><p>Rozvrh, platby, zprávy, hodnocení a absence se načtou, až budou v nastavení oba přístupové kódy do Edookitu.</p></section>`;
+    return `<section class="panel school"><h2>Škola</h2><p>Rozvrh, platby, zprávy, hodnocení a absence se načtou, až budou v nastavení oba přístupové kódy do Edookitu.</p>${calls}</section>`;
   }
-  if (school.error) return `<section class="panel school"><h2>Škola</h2><p>${esc(school.error)}</p></section>`;
+  if (school.error) return `<section class="panel school"><h2>Škola</h2><p>${esc(school.error)}</p>${calls}</section>`;
   const data = school.data;
   const unpaid = data.payments.filter((item) => item.unpaid);
   const paid = data.payments.filter((item) => !item.unpaid);
@@ -72,5 +75,6 @@ export function schoolSection(school) {
     <div class="school-head"><h3>Zprávy</h3><a href="${esc(data.base)}/overview/updates">Schránka v Edookitu</a></div>
     ${messages}
     <div class="school-children">${data.children.map((child) => childBlock(child, data.base)).join("")}</div>
+    ${calls}
   </section>`;
 }

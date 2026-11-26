@@ -1,4 +1,5 @@
 import { cookieHeader, readCookies } from "./_lib/access.js";
+import { renderCalls } from "./_lib/calls.js";
 import { esc, messagePage } from "./_lib/render.js";
 import { SECRET_FIELDS, collectSecrets, storeSecrets } from "./_lib/store-secrets.js";
 
@@ -6,7 +7,7 @@ function secure(request) {
   return new URL(request.url).protocol === "https:";
 }
 
-function page(csrf, notice = "") {
+function page(csrf, notice = "", calls = []) {
   const fields = SECRET_FIELDS.map(([name, label]) => `<label for="${esc(name)}">${esc(label)} <code>${esc(name)}</code></label>
     <input id="${esc(name)}" name="${esc(name)}" type="password" autocomplete="off" value="${name === "EDOOKIT_BASE_URL" ? "https://zsmsene.edookit.net" : ""}">`).join("");
   return `<!DOCTYPE html>
@@ -29,6 +30,7 @@ function page(csrf, notice = "") {
       ${fields}
       <button type="submit" class="btn btn-primary">Uložit do secrets</button>
     </form>
+    ${renderCalls(calls)}
     <p><a class="text-link" href="/">Zpět na přehled</a></p>
   </section></main>
 </body>
@@ -66,11 +68,7 @@ export async function onRequestPost({ request, env }) {
     if (saved.cloudflare.length) parts.push(`Cloudflare: ${saved.cloudflare.join(", ")}`);
     if (!saved.githubReady) parts.push("GitHub token ve funkci chybí");
     if (saved.errors.length) parts.push(saved.errors.join(". "));
-    const url = new URL("/hesla", request.url);
-    url.searchParams.set("ulozeno", parts.join(". ") || "Nic se neuložilo.");
-    const headers = new Headers({ Location: url.pathname + url.search });
-    headers.append("set-cookie", cookie);
-    return new Response(null, { status: 303, headers });
+    return html(page(fresh, parts.join(". ") || "Nic se neuložilo.", saved.calls), 200, [cookie]);
   } catch {
     return html(page(fresh, ""), 502, [cookie]);
   }

@@ -1,3 +1,4 @@
+import { createCallLog, safeUrl } from "./calls.js";
 import {
   parseAbsenceSummary,
   parseExcused,
@@ -25,8 +26,9 @@ function schoolBase(env) {
 }
 
 class Session {
-  constructor() {
+  constructor(log) {
     this.jar = new Map();
+    this.log = log;
   }
 
   store(url, response) {
@@ -52,8 +54,18 @@ class Session {
     const requestHeaders = { accept: "text/html,application/json", "user-agent": "Mozilla/5.0", ...headers };
     const cookie = this.header(url);
     if (cookie) requestHeaders.cookie = cookie;
+    const started = Date.now();
     const response = await fetch(url, { method, headers: requestHeaders, body, redirect: "manual" });
     this.store(url, response);
+    this.log?.add({
+      where: "Edookit",
+      method,
+      url: safeUrl(url),
+      status: response.status,
+      ok: response.status < 400,
+      ms: Date.now() - started,
+      note: response.status >= 300 && response.status < 400 ? "přesměrování" : "",
+    });
     return response;
   }
 
@@ -124,13 +136,32 @@ function labelFor(base) {
 }
 
 export async function loadSchool(env) {
+  const log = createCallLog();
   const code1 = String(env.EDOOKIT_ACCESS_CODE_1 || "");
   const code2 = String(env.EDOOKIT_ACCESS_CODE_2 || "");
-  if (!code1 && !code2) return { missing: true };
-  if (!code1 || !code2) return { error: "Nastavte oba přístupové kódy do Edookitu." };
+  log.add({
+    where: "Cloudflare Pages",
+    method: "env",
+    url: "EDOOKIT_ACCESS_CODE_1",
+    status: code1 ? "je" : "chybí",
+    ok: Boolean(code1),
+    ms: 0,
+    note: code1 ? `délka ${code1.length}` : "hodnota ve funkci není",
+  });
+  log.add({
+    where: "Cloudflare Pages",
+    method: "env",
+    url: "EDOOKIT_ACCESS_CODE_2",
+    status: code2 ? "je" : "chybí",
+    ok: Boolean(code2),
+    ms: 0,
+    note: code2 ? `délka ${code2.length}` : "hodnota ve funkci není",
+  });
+  if (!code1 && !code2) return { missing: true, calls: log.entries };
+  if (!code1 || !code2) return { error: "Nastavte oba přístupové kódy do Edookitu.", calls: log.entries };
   try {
     const base = schoolBase(env);
-    const session = new Session();
+    const session = new Session(log);
     await session.login(base, code1, code2);
     const [timetableHtml, paymentsHtml, updatesHtml] = await Promise.all([
       session.page(base, "/timetable/"),
@@ -171,11 +202,29 @@ export async function loadSchool(env) {
         messages: parseMessages(updatesHtml),
         children,
       },
+      calls: log.entries,
     };
   } catch (error) {
     if (error instanceof EdookitError && error.code === "login") {
-      return { error: "Edookit přihlášení odmítl. Zkontrolujte oba přístupové kódy." };
+      return { error: "Edookit přihlášení odmítl. Zkontrolujte oba přístupové kódy.", calls: log.entries };
     }
-    return { error: "Školní portál se teď nepodařilo načíst. Obědy zůstávají." };
+    log.add({
+      where: "Edookit",
+      method: "chyba",
+      url: schoolBaseSafe(env),
+      status: "selhalo",
+      ok: false,
+      ms: 0,
+      note: "načtení spadlo dřív, než přišla odpověď",
+    });
+    return { error: "Školní portál se teď nepodařilo načíst. Obědy zůstávají.", calls: log.entries };
+  }
+}
+
+function schoolBaseSafe(env) {
+  try {
+    return schoolBase(env);
+  } catch {
+    return "EDOOKIT_BASE_URL";
   }
 }
