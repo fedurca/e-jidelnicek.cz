@@ -24,6 +24,18 @@ def test_forwarded_ip_is_used_only_when_the_proxy_is_trusted():
     assert client_ip("10.0.0.8", "185.22.236.11", trust=False) == "10.0.0.8"
 
 
+def test_cloudflare_ip_ignores_a_spoofed_forwarded_header():
+    seen = client_ip(
+        "127.0.0.1",
+        "185.22.236.11",
+        trust=False,
+        cf_connecting_ip="8.8.8.8",
+        trust_cf=True,
+    )
+    assert seen == "8.8.8.8"
+    assert client_ip("127.0.0.1", "185.22.236.11", trust=False, trust_cf=True) == ""
+
+
 def test_http_gate_blocks_other_ips_and_accepts_the_code(monkeypatch):
     monkeypatch.setenv("ACCESS_UUID", "test-code")
     monkeypatch.setenv("ALLOWED_IPS", "185.22.236.11")
@@ -51,6 +63,24 @@ def test_http_gate_blocks_other_ips_and_accepts_the_code(monkeypatch):
     assert ok.status_code == 303
     assert ok.headers["location"] == "/"
     assert client.cookies.get("obed_vstup")
+
+
+def test_http_gate_uses_cloudflare_ip_not_the_forwarded_header(monkeypatch):
+    monkeypatch.setenv("ACCESS_UUID", "test-code")
+    monkeypatch.setenv("ALLOWED_IPS", "185.22.236.11")
+    monkeypatch.setenv("ALLOW_LOOPBACK", "0")
+    monkeypatch.setenv("TRUST_PROXY", "0")
+    monkeypatch.setenv("TRUST_CLOUDFLARE", "1")
+    client = TestClient(app)
+
+    spoofed = client.get("/", headers={"X-Forwarded-For": "185.22.236.11"})
+    assert spoofed.status_code == 403
+
+    blocked = client.get("/", headers={"CF-Connecting-IP": "8.8.8.8", "X-Forwarded-For": "185.22.236.11"})
+    assert blocked.status_code == 403
+
+    home = client.get("/vstup", headers={"CF-Connecting-IP": "185.22.236.11"}, follow_redirects=False)
+    assert home.status_code == 200
 
 
 def test_code_is_checked_by_hash_and_opens_a_session():

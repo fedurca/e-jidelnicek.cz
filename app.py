@@ -21,6 +21,7 @@ from jidelnicek.access import (
     load_code_hash,
     session_matches,
     session_token,
+    trust_cloudflare,
     trust_proxy,
 )
 from jidelnicek.board import build_board, find_button, resolve_order
@@ -43,6 +44,8 @@ def _seen_ip(request: Request) -> str:
         request.client.host if request.client else "",
         request.headers.get("x-forwarded-for"),
         trust_proxy(),
+        request.headers.get("cf-connecting-ip"),
+        trust_cloudflare(),
     )
 
 

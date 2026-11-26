@@ -1,0 +1,12 @@
+{
+  "name": "skolni-obedy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev public --port 8741",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "4.54.0"
+  }
+}

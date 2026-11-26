@@ -50,7 +50,19 @@ def trust_proxy() -> bool:
     return os.environ.get("TRUST_PROXY", "0").strip().lower() in {"1", "true", "ano"}
 
 
-def client_ip(host: str | None, forwarded_for: str | None, trust: bool) -> str:
+def trust_cloudflare() -> bool:
+    return os.environ.get("TRUST_CLOUDFLARE", "0").strip().lower() in {"1", "true", "ano"}
+
+
+def client_ip(
+    host: str | None,
+    forwarded_for: str | None,
+    trust: bool,
+    cf_connecting_ip: str | None = None,
+    trust_cf: bool = False,
+) -> str:
+    if trust_cf:
+        return (cf_connecting_ip or "").strip()
     if trust and forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return (host or "").strip()
