@@ -57,19 +57,21 @@ async function putGithub(token, name, value, key) {
   }
 }
 
-async function putCloudflare(token, name, value) {
+async function putCloudflare(token, pairs) {
   const projectUrl = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects/${PROJECT}`;
   const current = await fetch(projectUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (!current.ok) throw new Error("Cloudflare projekt nešel načíst.");
   const body = await current.json();
   const hash = body?.result?.deployment_configs?.production?.wrangler_config_hash;
+  const envVars = {};
+  for (const [name, value] of pairs) envVars[name] = { value, type: "secret_text" };
   const response = await fetch(projectUrl, {
     method: "PATCH",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       deployment_configs: {
         production: {
-          env_vars: { [name]: { value, type: "secret_text" } },
+          env_vars: envVars,
           ...(hash ? { wrangler_config_hash: hash } : {}),
         },
       },
@@ -84,21 +86,20 @@ export async function storeSecrets(env, pairs) {
   const errors = [];
   const key = env.GITHUB_TOKEN ? await githubKey(env.GITHUB_TOKEN) : null;
   for (const [name, value] of pairs) {
-    if (key) {
-      try {
-        await putGithub(env.GITHUB_TOKEN, name, value, key);
-        github.push(name);
-      } catch {
-        errors.push(`${name} se do GitHubu neuložilo`);
-      }
+    if (!key) break;
+    try {
+      await putGithub(env.GITHUB_TOKEN, name, value, key);
+      github.push(name);
+    } catch {
+      errors.push(`${name} se do GitHubu neuložilo`);
     }
-    if (env.CLOUDFLARE_API_TOKEN) {
-      try {
-        await putCloudflare(env.CLOUDFLARE_API_TOKEN, name, value);
-        cloudflare.push(name);
-      } catch {
-        errors.push(`${name} se do Cloudflare neuložilo`);
-      }
+  }
+  if (env.CLOUDFLARE_API_TOKEN) {
+    try {
+      await putCloudflare(env.CLOUDFLARE_API_TOKEN, pairs);
+      cloudflare.push(...pairs.map(([name]) => name));
+    } catch {
+      errors.push("Cloudflare secrets se nepodařilo uložit najednou");
     }
   }
   return { github, cloudflare, errors, githubReady: Boolean(key), cloudflareReady: Boolean(env.CLOUDFLARE_API_TOKEN) };
