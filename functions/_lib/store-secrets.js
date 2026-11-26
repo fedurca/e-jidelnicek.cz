@@ -77,7 +77,9 @@ async function putCloudflare(token, pairs) {
       },
     }),
   });
-  if (!response.ok) throw new Error("Cloudflare secret se nepodařilo uložit.");
+  if (!response.ok) throw new Error(`Cloudflare secret se nepodařilo uložit (${response.status}).`);
+  const payload = await response.json().catch(() => null);
+  if (payload && payload.success === false) throw new Error("Cloudflare secret se nepodařilo uložit.");
 }
 
 export async function storeSecrets(env, pairs) {
@@ -98,8 +100,8 @@ export async function storeSecrets(env, pairs) {
     try {
       await putCloudflare(env.CLOUDFLARE_API_TOKEN, pairs);
       cloudflare.push(...pairs.map(([name]) => name));
-    } catch {
-      errors.push("Cloudflare secrets se nepodařilo uložit najednou");
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "Cloudflare secrets se nepodařilo uložit najednou");
     }
   }
   return { github, cloudflare, errors, githubReady: Boolean(key), cloudflareReady: Boolean(env.CLOUDFLARE_API_TOKEN) };
