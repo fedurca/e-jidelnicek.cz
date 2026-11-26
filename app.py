@@ -13,17 +13,68 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from jidelnicek.access import (
+    client_ip,
+    code_matches,
+    gate_enabled,
+    ip_allowed,
+    load_code_hash,
+    session_matches,
+    session_token,
+    trust_proxy,
+)
 from jidelnicek.board import build_board, find_button, resolve_order
 from jidelnicek.client import CanteenClient, CanteenUnavailable
 from jidelnicek.credentials import CredentialsMissing, LoginFailed
 
 ROOT = Path(__file__).resolve().parent
 CSRF_COOKIE = "obed_csrf"
+SESSION_COOKIE = "obed_vstup"
+OPEN_PATHS = {"/vstup", "/zdravi"}
 
 app = FastAPI(title="Obědy", docs_url=None, redoc_url=None, openapi_url=None)
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "templates")
 client = CanteenClient()
+
+
+def _seen_ip(request: Request) -> str:
+    return client_ip(
+        request.client.host if request.client else "",
+        request.headers.get("x-forwarded-for"),
+        trust_proxy(),
+    )
+
+
+def _session_ok(request: Request) -> bool:
+    digest = load_code_hash()
+    if not digest:
+        return True
+    return session_matches(request.cookies.get(SESSION_COOKIE, ""), digest)
+
+
+@app.middleware("http")
+async def allow_only_home(request: Request, call_next):
+    if not gate_enabled():
+        return await call_next(request)
+    ip = _seen_ip(request)
+    if not ip_allowed(ip):
+        page = templates.TemplateResponse(
+            request,
+            "message.html",
+            {
+                "kind": "bad",
+                "title": "Sem to z téhle adresy nejde",
+                "text": f"Připojení z {ip or 'neznámé adresy'} sem nepouštíme.",
+            },
+            status_code=403,
+        )
+        return page
+    if request.url.path.startswith("/static") or request.url.path in OPEN_PATHS:
+        return await call_next(request)
+    if _session_ok(request):
+        return await call_next(request)
+    return RedirectResponse("/vstup", status_code=303)
 
 SUCCESS = {
     "order": ("objednano", "oběd je objednaný."),
@@ -110,6 +161,48 @@ def _redirect(code: str, problem: str = "", child_id: int | None = None):
 @app.get("/zdravi")
 def health():
     return {"ok": True}
+
+
+@app.get("/vstup", response_class=HTMLResponse)
+def enter_form(request: Request):
+    if not gate_enabled():
+        return RedirectResponse("/", status_code=303)
+    token = _csrf(request)
+    response = templates.TemplateResponse(
+        request,
+        "login.html",
+        {"csrf": token, "error": ""},
+    )
+    return _set_csrf(response, request, token)
+
+
+@app.post("/vstup")
+def enter(request: Request, csrf: str = Form(""), kod: str = Form("")):
+    digest = load_code_hash()
+    if not digest:
+        return RedirectResponse("/", status_code=303)
+    expected = request.cookies.get(CSRF_COOKIE, "")
+    csrf_ok = bool(expected) and len(expected) == len(csrf) and secrets.compare_digest(expected, csrf)
+    token = _csrf(request)
+    if not csrf_ok or not code_matches(kod, digest):
+        response = templates.TemplateResponse(
+            request,
+            "login.html",
+            {"csrf": token, "error": "Kód nesedí."},
+            status_code=401 if csrf_ok else 403,
+        )
+        return _set_csrf(response, request, token)
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie(
+        SESSION_COOKIE,
+        session_token(digest),
+        httponly=True,
+        samesite="lax",
+        secure=_secure(request),
+        max_age=60 * 60 * 24 * 30,
+        path="/",
+    )
+    return _set_csrf(response, request, token)
 
 
 @app.get("/", response_class=HTMLResponse)
