@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Obědy · tento a příští týden</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@420;520;640&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="mast">
+    <div class="wrap mast-inner">
+      <p class="eyebrow">Školní jídelna</p>
+      <h1>Obědy na tento a příští týden</h1>
+      <p class="lede">{{ board.canteen_name }}</p>
+      <p class="updated">Aktualizováno {{ board.updated_label }}</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    {% if flash %}
+      <p class="flash flash-{{ flash.kind }}" role="status">{{ flash.text }}</p>
+    {% endif %}
+
+    {% if board.empty %}
+      <section class="panel">
+        <h2>U účtu nejsou žádné děti</h2>
+        <p>V e-Jídelníčku k tomuto e-mailu není přidaný strávník.</p>
+      </section>
+    {% else %}
+      <section class="credits" aria-label="Kredit dětí">
+        {% for child in board.children %}
+          <article class="credit {% if child.low_credit %}is-low{% endif %}">
+            <p class="credit-name">{{ child.given_name }}</p>
+            <p class="credit-meta">{{ child.full_name }}{% if child.class_label %} · {{ child.class_label }}{% endif %}</p>
+            <p class="credit-amount">{{ child.credit_label }}</p>
+            <p class="credit-label">{% if child.low_credit %}Kredit je nižší než cena oběda{% else %}Kredit na účtě{% endif %}</p>
+          </article>
+        {% endfor %}
+      </section>
+
+      <section class="open-list">
+        <h2>Ještě k objednání</h2>
+        {% if board.still_open %}
+          <ul>
+            {% for item in board.still_open %}
+              <li>
+                <a href="#{{ item.anchor }}">
+                  <strong>{{ item.child_name }}</strong>
+                  <span>{{ item.when }}</span>
+                  <em>{{ item.dish }}</em>
+                </a>
+                <form method="post" action="/objednat" data-confirm="{{ item.confirm }}">
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <input type="hidden" name="visitor_id" value="{{ item.visitor_id }}">
+                  <input type="hidden" name="day" value="{{ item.iso }}">
+                  <input type="hidden" name="action" value="order">
+                  <input type="hidden" name="menu_type_id" value="{{ item.menu_type_id }}">
+                  <button type="submit" class="btn btn-primary">Objednat</button>
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>V těchto dvou týdnech není otevřený žádný neobjednaný oběd.</p>
+        {% endif %}
+      </section>
+
+      {% if board.rule %}
+        <p class="rule">{{ board.rule }}</p>
+      {% endif %}
+
+      {% for week in board.weeks %}
+        <section class="week" aria-labelledby="{{ week.key }}">
+          <div class="week-head">
+            <div>
+              <h2 id="{{ week.key }}">{{ week.title }}</h2>
+              <p class="range">{{ week.range_label }}</p>
+            </div>
+            <p class="score">{{ week.score }}</p>
+          </div>
+          <p class="lead">{{ week.lead }}</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Den</th>
+                  {% for child in board.children %}
+                    <th scope="col">{{ child.given_name }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in week.rows %}
+                  <tr id="den-{{ row.iso }}" class="{% if row.is_today %}is-today{% endif %}">
+                    <th scope="row">
+                      <span class="weekday">{{ row.weekday }}</span>
+                      <span class="daynum">{{ row.day_label }}</span>
+                      {% if row.is_today %}<span class="today-mark">dnes</span>{% endif %}
+                    </th>
+                    {% for cell in row.cells %}
+                      <td data-child="{{ cell.child_name }}" data-date="{{ row.iso }}" data-state="{{ cell.tone }}">
+                        <p class="status status-{{ cell.tone }}">{{ cell.status }}</p>
+                        {% for dish in cell.mains %}
+                          <p class="dish {% if dish.selected %}is-selected{% endif %}">{{ dish.name }}</p>
+                        {% endfor %}
+                        {% if cell.extras %}
+                          <ul class="extras">
+                            {% for extra in cell.extras %}
+                              <li><span>{{ extra.type_name }}</span> {{ extra.name }}</li>
+                            {% endfor %}
+                          </ul>
+                        {% endif %}
+                        {% if cell.note %}<p class="note">{{ cell.note }}</p>{% endif %}
+                        {% for button in cell.buttons %}
+                          <form method="post" action="/objednat" data-confirm="{{ button.confirm }}">
+                            <input type="hidden" name="csrf" value="{{ csrf }}">
+                            <input type="hidden" name="visitor_id" value="{{ cell.visitor_id }}">
+                            <input type="hidden" name="day" value="{{ row.iso }}">
+                            <input type="hidden" name="action" value="{{ button.action }}">
+                            {% if button.menu_type_id %}<input type="hidden" name="menu_type_id" value="{{ button.menu_type_id }}">{% endif %}
+                            <button type="submit" class="btn btn-{{ button.kind }}">{{ button.label }}</button>
+                          </form>
+                        {% endfor %}
+                      </td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      {% endfor %}
+    {% endif %}
+  </main>
+
+  <footer class="wrap foot">
+    <p>Údaje i objednávky jdou rovnou do e-Jídelníčku. Zrušení i změna platí, jen dokud je jídelna pustí.</p>
+  </footer>
+  <script>
+    document.querySelectorAll("form[data-confirm]").forEach(function (form) {
+      form.addEventListener("submit", function (event) {
+        if (!window.confirm(form.dataset.confirm)) {
+          event.preventDefault();
+          return;
+        }
+        var button = form.querySelector("button");
+        if (button) button.disabled = true;
+      });
+    });
+  </script>
+</body>
+</html>
