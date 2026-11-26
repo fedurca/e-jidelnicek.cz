@@ -4,7 +4,7 @@ import { placeOrder } from "./_lib/service.js";
 
 const SUCCESS = { order: "objednano", change: "zmeneno", cancel: "zruseno" };
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, data }) {
   const form = await request.formData();
   const csrf = String(form.get("csrf") || "");
   const expected = readCookies(request).obed_csrf || "";
@@ -29,7 +29,7 @@ export async function onRequestPost({ request, env }) {
   if (!SUCCESS[action] || !/^\d{4}-\d{2}-\d{2}$/.test(day) || (action !== "cancel" && menuTypeId == null)) {
     return back("chyba", "uzavreno");
   }
-  const result = await placeOrder(env, { visitorId, day, action, menuTypeId });
+  const result = await placeOrder(env, data, { visitorId, day, action, menuTypeId });
   if (!result.ok) return back("chyba", result.code);
   return back(SUCCESS[action]);
 }

@@ -1,20 +1,12 @@
 import { createCallLog, safeUrl } from "./calls.js";
+import { CF_ACCOUNT, CF_PROJECT, SECRET_FIELDS } from "./names.js";
+import { pushRuntime } from "./runtime-store.js";
 import { base64ToBytes, bytesToBase64, seal } from "./seal.js";
 
-export const SECRET_FIELDS = [
-  ["EDOOKIT_ACCESS_CODE_1", "Edookit, první kód"],
-  ["EDOOKIT_ACCESS_CODE_2", "Edookit, druhý kód"],
-  ["EDOOKIT_BASE_URL", "Adresa Edookitu"],
-  ["EJIDELNICEK_EMAIL", "E-mail do jídelny"],
-  ["EJIDELNICEK_PASSWORD", "Heslo do jídelny"],
-  ["ACCESS_UUID", "Přístupový kód této stránky"],
-  ["ALLOWED_IPS", "Povolené IP adresy"],
-];
+export { SECRET_FIELDS };
 
 const ALLOWED = new Set(SECRET_FIELDS.map(([name]) => name));
 const REPO = "fedurca/e-jidelnicek.cz";
-const ACCOUNT = "08036738b61d2eac6a5bb21018ad89cc";
-const PROJECT = "skolni-obedy";
 
 export function collectSecrets(form) {
   const out = [];
@@ -89,7 +81,7 @@ async function putGithub(token, name, value, key, log) {
 }
 
 async function putCloudflare(token, pairs, log) {
-  const projectUrl = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/pages/projects/${PROJECT}`;
+  const projectUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/pages/projects/${CF_PROJECT}`;
   const names = pairs.map(([name]) => name).join(", ");
   const current = await traced(log, "Cloudflare", "GET", projectUrl, "načtení projektu před zápisem", () => fetch(projectUrl, {
     headers: { Authorization: `Bearer ${token}` },
@@ -164,5 +156,12 @@ export async function storeSecrets(env, pairs) {
   } else {
     log.add({ where: "Cloudflare", method: "env", url: "CLOUDFLARE_API_TOKEN", status: "chybí", ok: false, ms: 0, note: "zápis do Pages nejde" });
   }
-  return { github, cloudflare, errors, calls: log.entries, githubReady: Boolean(key), cloudflareReady: Boolean(env.CLOUDFLARE_API_TOKEN) };
+  let stored = { saved: [] };
+  try {
+    stored = await pushRuntime(env, pairs, log);
+  } catch {
+    stored = { saved: [] };
+  }
+  if (stored.saved.length !== pairs.length) errors.push("Úložiště, ze kterého stránka čte hned, nevzalo všechny hodnoty");
+  return { github, cloudflare, stored: stored.saved, errors, calls: log.entries, githubReady: Boolean(key), cloudflareReady: Boolean(env.CLOUDFLARE_API_TOKEN) };
 }

@@ -7,13 +7,14 @@ function secure(request) {
   return new URL(request.url).protocol === "https:";
 }
 
-export async function onRequestGet({ request, env }) {
+export async function onRequestGet({ request, env, data }) {
   const url = new URL(request.url);
   const csrf = crypto.randomUUID();
-  const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
+  const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
   headers.append("set-cookie", cookieHeader("obed_csrf", csrf, { secure: secure(request) }));
   try {
-    const [{ board }, school] = await Promise.all([currentBoard(env), loadSchool(env)]);
+    const [{ board }, school] = await Promise.all([currentBoard(env, data), loadSchool(env, data)]);
+    if (data?.runtimeCalls?.length) school.calls = [...data.runtimeCalls, ...(school.calls || [])];
     return new Response(boardPage(board, { csrf, flash: flashText(url, board), school }), { headers });
   } catch (error) {
     const code = error instanceof AppError ? error.code : "canteen";

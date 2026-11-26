@@ -1,4 +1,6 @@
+import { addLocalBindings, addProjectGap, gapSentence } from "./bindings.js";
 import { createCallLog, safeUrl } from "./calls.js";
+import { secret } from "./runtime-store.js";
 import {
   parseAbsenceSummary,
   parseExcused,
@@ -19,10 +21,10 @@ export class EdookitError extends Error {
   }
 }
 
-function schoolBase(env) {
-  const value = String(env.EDOOKIT_BASE_URL || "https://zsmsene.edookit.net").replace(/\/$/, "");
-  if (!/^https:\/\/[a-z0-9-]+\.edookit\.net$/.test(value)) throw new EdookitError("config");
-  return value;
+function schoolBase(value) {
+  const base = String(value || "https://zsmsene.edookit.net").replace(/\/$/, "");
+  if (!/^https:\/\/[a-z0-9-]+\.edookit\.net$/.test(base)) throw new EdookitError("config");
+  return base;
 }
 
 class Session {
@@ -87,7 +89,18 @@ class Session {
     const clientId = /uu_app_oidc_providers_oidcg02_client_id:\s*"([^"]+)"/.exec(login.text)?.[1];
     const oidc = /uu_app_oidc_providers_oidcg02_uri:\s*"([^"]+)"/.exec(login.text)?.[1];
     const redirectUri = /uu_app_oidc_redirect_uri:\s*'([^']+)'/.exec(login.text)?.[1];
-    if (!clientId || !oidc || !redirectUri) throw new EdookitError("login");
+    if (!clientId || !oidc || !redirectUri) {
+      this.log?.add({
+        where: "Edookit",
+        method: "kontrola",
+        url: safeUrl(`${base}/user/login`),
+        status: login.status,
+        ok: false,
+        ms: 0,
+        note: "na přihlašovací stránce chybí oidc údaje",
+      });
+      throw new EdookitError("login");
+    }
     const auth = new URL(`${oidc.replace(/\/$/, "")}/auth`);
     auth.searchParams.set("response_type", "code");
     auth.searchParams.set("client_id", clientId);
@@ -121,7 +134,19 @@ class Session {
       response = await this.send(current);
     }
     const home = await this.follow(`${base}/`);
-    if (home.text.includes("plus4ULoginButton") || !home.text.includes("lesson-entry")) throw new EdookitError("login");
+    if (home.text.includes("plus4ULoginButton") || !home.text.includes("lesson-entry")) {
+      const note = home.text.includes("plus4ULoginButton") ? "pořád přihlašovací obrazovka" : "v odpovědi není rozvrh";
+      this.log?.add({
+        where: "Edookit",
+        method: "kontrola",
+        url: safeUrl(`${base}/`),
+        status: home.status,
+        ok: false,
+        ms: 0,
+        note,
+      });
+      throw new EdookitError("login");
+    }
   }
 
   async page(base, path) {
@@ -135,32 +160,27 @@ function labelFor(base) {
   return base === "https://zsmsene.edookit.net" ? "ZŠ a MŠ Mšené-lázně" : new URL(base).hostname;
 }
 
-export async function loadSchool(env) {
+const EDOOKIT_NAMES = ["EDOOKIT_ACCESS_CODE_1", "EDOOKIT_ACCESS_CODE_2", "EDOOKIT_BASE_URL"];
+
+export async function loadSchool(env, data) {
   const log = createCallLog();
-  const code1 = String(env.EDOOKIT_ACCESS_CODE_1 || "");
-  const code2 = String(env.EDOOKIT_ACCESS_CODE_2 || "");
-  log.add({
-    where: "Cloudflare Pages",
-    method: "env",
-    url: "EDOOKIT_ACCESS_CODE_1",
-    status: code1 ? "je" : "chybí",
-    ok: Boolean(code1),
-    ms: 0,
-    note: code1 ? `délka ${code1.length}` : "hodnota ve funkci není",
-  });
-  log.add({
-    where: "Cloudflare Pages",
-    method: "env",
-    url: "EDOOKIT_ACCESS_CODE_2",
-    status: code2 ? "je" : "chybí",
-    ok: Boolean(code2),
-    ms: 0,
-    note: code2 ? `délka ${code2.length}` : "hodnota ve funkci není",
-  });
-  if (!code1 && !code2) return { missing: true, calls: log.entries };
-  if (!code1 || !code2) return { error: "Nastavte oba přístupové kódy do Edookitu.", calls: log.entries };
+  addLocalBindings(env, data, log, EDOOKIT_NAMES);
+  const code1 = secret(env, data, "EDOOKIT_ACCESS_CODE_1");
+  const code2 = secret(env, data, "EDOOKIT_ACCESS_CODE_2");
+  if (!code1 || !code2) await addProjectGap(env, log, EDOOKIT_NAMES);
+  if (!code1 && !code2) {
+    const why = EDOOKIT_NAMES.slice(0, 2).map((name) => gapSentence(log.entries, name)).filter(Boolean).join(" ");
+    if (why) return { error: why, calls: log.entries };
+    return { missing: true, calls: log.entries };
+  }
+  if (!code1 || !code2) {
+    const name = code1 ? "EDOOKIT_ACCESS_CODE_2" : "EDOOKIT_ACCESS_CODE_1";
+    const why = gapSentence(log.entries, name) || "Doplňte ho ve formuláři hesel.";
+    return { error: `Chybí ${name}. ${why}`, calls: log.entries };
+  }
+  let base;
   try {
-    const base = schoolBase(env);
+    base = schoolBase(secret(env, data, "EDOOKIT_BASE_URL"));
     const session = new Session(log);
     await session.login(base, code1, code2);
     const [timetableHtml, paymentsHtml, updatesHtml] = await Promise.all([
@@ -206,12 +226,15 @@ export async function loadSchool(env) {
     };
   } catch (error) {
     if (error instanceof EdookitError && error.code === "login") {
-      return { error: "Edookit přihlášení odmítl. Zkontrolujte oba přístupové kódy.", calls: log.entries };
+      return { error: "Edookit přihlášení odmítl. V tabulce volání je krok, na kterém to skončilo.", calls: log.entries };
+    }
+    if (error instanceof EdookitError && error.code === "config") {
+      return { error: "Adresa Edookitu má být ve tvaru https://něco.edookit.net.", calls: log.entries };
     }
     log.add({
       where: "Edookit",
       method: "chyba",
-      url: schoolBaseSafe(env),
+      url: schoolBaseSafe(secret(env, data, "EDOOKIT_BASE_URL")),
       status: "selhalo",
       ok: false,
       ms: 0,
@@ -221,9 +244,9 @@ export async function loadSchool(env) {
   }
 }
 
-function schoolBaseSafe(env) {
+function schoolBaseSafe(value) {
   try {
-    return schoolBase(env);
+    return schoolBase(value);
   } catch {
     return "EDOOKIT_BASE_URL";
   }

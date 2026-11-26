@@ -1,5 +1,6 @@
 import { buildBoard, findButton, resolveOrder } from "./board.js";
 import { CanteenError, projectChildren, withCanteen } from "./canteen.js";
+import { secret } from "./runtime-store.js";
 import { addDays, mondayOf, pragueMidnightIso, pragueYmd } from "./time.js";
 
 export class AppError extends Error {
@@ -13,14 +14,18 @@ function stamp(ymd) {
   return `${ymd}T00:00:00.000Z`;
 }
 
-export async function loadSnapshot(env) {
-  if (!env.EJIDELNICEK_EMAIL || !env.EJIDELNICEK_PASSWORD) throw new AppError("credentials");
+function canteenLogin(env, data) {
+  const email = secret(env, data, "EJIDELNICEK_EMAIL");
+  const password = secret(env, data, "EJIDELNICEK_PASSWORD");
+  if (!email || !password) throw new AppError("credentials");
+  return { email, password };
+}
+
+export async function loadSnapshot(env, data) {
+  const loginBody = canteenLogin(env, data);
   try {
     return await withCanteen(async (call) => {
-      const login = await call(":login", {
-        email: env.EJIDELNICEK_EMAIL,
-        password: env.EJIDELNICEK_PASSWORD,
-      });
+      const login = await call(":login", loginBody);
       if (!login || login.error || !login.result?.user) throw new AppError("login");
       const token = login.result.token || "";
       const userId = login.result.user.id;
@@ -50,23 +55,20 @@ export async function loadSnapshot(env) {
   }
 }
 
-export async function currentBoard(env) {
-  const snapshot = await loadSnapshot(env);
+export async function currentBoard(env, data) {
+  const snapshot = await loadSnapshot(env, data);
   return { snapshot, board: buildBoard(snapshot.children, snapshot.orders, snapshot.menus, new Date()) };
 }
 
-export async function placeOrder(env, { visitorId, day, action, menuTypeId }) {
-  const snapshot = await loadSnapshot(env);
+export async function placeOrder(env, data, { visitorId, day, action, menuTypeId }) {
+  const snapshot = await loadSnapshot(env, data);
   const board = buildBoard(snapshot.children, snapshot.orders, snapshot.menus, new Date());
   if (!findButton(board, visitorId, day, action, menuTypeId)) return { ok: false, code: "uzavreno" };
   const resolved = resolveOrder(snapshot.children, snapshot.orders, visitorId, action, menuTypeId);
   if (!resolved) return { ok: false, code: "uzavreno" };
   try {
     const result = await withCanteen(async (call) => {
-      const login = await call(":login", {
-        email: env.EJIDELNICEK_EMAIL,
-        password: env.EJIDELNICEK_PASSWORD,
-      });
+      const login = await call(":login", canteenLogin(env, data));
       if (!login || login.error) throw new AppError("login");
       const body = {
         fakeNow: null,

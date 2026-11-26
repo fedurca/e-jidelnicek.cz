@@ -1,0 +1,9 @@
+name = "skolni-obedy-runtime"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+account_id = "08036738b61d2eac6a5bb21018ad89cc"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "SECRETS"
+id = "5e6f367a10da4526822b216a8e278e54"

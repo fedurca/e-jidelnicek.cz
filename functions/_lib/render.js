@@ -44,9 +44,11 @@ ${body}
 </html>`;
 }
 
+export const BUILD = "uloziste-1";
+
 export function messagePage(title, text) {
   return page(title, `<header class="mast"><div class="wrap mast-inner"><p class="eyebrow">Školní jídelna</p><h1>${esc(title)}</h1></div></header>
-<main class="wrap"><section class="panel"><p>${esc(text)}</p></section></main>`);
+<main class="wrap"><section class="panel"><p>${esc(text)}</p><p class="school-meta">Nasazení ${BUILD}</p></section></main>`);
 }
 
 export function loginPage({ csrf, error = "" }) {
@@ -130,7 +132,7 @@ export function boardPage(board, { csrf, flash = "", school = null } = {}) {
       ${flash ? `<p class="flash flash-${flash.startsWith("chyba:") ? "bad" : "ok"}" role="status">${esc(flash.replace(/^chyba:/, ""))}</p>` : ""}
       ${body}
     </main>
-    <footer class="wrap foot"><p>Údaje i objednávky jdou rovnou do e-Jídelníčku. Zrušení i změna platí, jen dokud je jídelna pustí. <a class="text-link" href="/hesla">Uložit hesla</a></p></footer>
+    <footer class="wrap foot"><p>Údaje i objednávky jdou rovnou do e-Jídelníčku. Zrušení i změna platí, jen dokud je jídelna pustí. <a class="text-link" href="/hesla">Uložit hesla</a></p><p class="school-meta">Nasazení ${BUILD}</p></footer>
     <script>
       document.querySelectorAll("form[data-confirm]").forEach(function (form) {
         form.addEventListener("submit", function (event) {

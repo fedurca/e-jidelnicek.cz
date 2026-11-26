@@ -17,7 +17,9 @@ V nastavení projektu přidejte tajné proměnné (ne do gitu):
 - `EDOOKIT_BASE_URL` adresa školy, například `https://zsmsene.edookit.net`
 - `EDOOKIT_ACCESS_CODE_1` a `EDOOKIT_ACCESS_CODE_2` dva přístupové kódy +4U Access do Edookitu
 
-Školní část čte rozvrh, požadované platby, zprávy, hodnocení a absence obou dětí. Kódy patří jen do tajných proměnných, ne do gitu. Bez nich stránka obědů dál funguje a u školy napíše, že kódy chybí.
+Školní část čte rozvrh, požadované platby, zprávy, hodnocení a absence obou dětí. Kódy patří jen do tajných proměnných, ne do gitu. Bez nich stránka obědů dál funguje a u školy jen napíše, který kód chybí.
+
+Formulář na `/hesla` zapíše vyplněnou hodnotu do úložiště, které stránka čte při každém otevření. Stejná hodnota jde i do nastavení projektu na Cloudflare. To nastavení se k už vydanému nasazení samo nepřipojí, proto tabulka volání ukazuje zvlášť „toto nasazení“, „úložiště“ a „projekt Cloudflare“.
 
 Z jiné IP Cloudflare stránku neotevře. Podvržená hlavička `X-Forwarded-For` se nebere, platí jen `CF-Connecting-IP`, kterou nastavuje Cloudflare. Bez `ACCESS_UUID` se veřejná adresa nespustí.
 
